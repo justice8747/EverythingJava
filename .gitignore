@@ -1,0 +1,5 @@
+volume-data/
+target/
+**/mysql.sock
+**/data/
+**/mysql/
