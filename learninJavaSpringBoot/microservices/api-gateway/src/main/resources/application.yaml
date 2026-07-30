@@ -10,3 +10,54 @@ spring:
       resourceserver:
         jwt:
           issuer-uri: "http://127.0.0.1:8181/realms/spring-microservices-security-realm"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
+  health:
+    circuitbreakers:
+      enabled: true
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 5s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        minimum-number-of-calls: 5
+
+
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 3s
+
+
+  retry:
+    configs:
+      default:
+        max-attempts: 3
+        wait-duration: 2s
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    urls:
+      - name: Product Service
+        url: /aggregate/product-service/v3/api-docs
+      - name: Order Service
+        url: /aggregate/order-service/v3/api-docs
+      - name: Inventory Service
+        url: /aggregate/inventory-service/v3/api-docs
+  api-docs:
+    path: /v3/api-docs

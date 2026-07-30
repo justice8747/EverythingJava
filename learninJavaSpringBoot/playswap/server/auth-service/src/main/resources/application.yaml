@@ -1,0 +1,79 @@
+server:
+  port: 8080
+  forward-headers-strategy: framework
+
+spring:
+  application:
+    name: auth-service
+
+  main:
+    web-application-type: reactive
+
+  datasource:
+    url: ${DB_AUTH_URL}
+    username: ${DB_AUTH_USERNAME}
+    password: ${DB_AUTH_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  security:
+    oauth2:
+      client:
+        registration:
+          spotify:
+            client-id: ${SPOTIFY_CLIENT_ID}
+            client-secret: ${SPOTIFY_CLIENT_SECRET}
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/spotify"
+            scope: playlist-read-private, playlist-modify-public, playlist-modify-private, user-read-private, user-read-email
+            client-name: Spotify
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/google"
+            scope:
+              - openid
+              - email
+              - profile
+              - https://www.googleapis.com/auth/youtube
+            client-name: Google
+        provider:
+          spotify:
+            authorization-uri: https://accounts.spotify.com/authorize
+            token-uri: https://accounts.spotify.com/api/token
+            user-info-uri: https://api.spotify.com/v1/me
+            user-name-attribute: id
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8181/realms/playswap-realm
+
+keycloak:
+  base-url: http://localhost:8181
+  realm: playswap-realm
+  client-id: ${KEYCLOAK_CLIENT_ID}
+  client-secret: ${KEYCLOAK_CLIENT_SECRET}
+
+app:
+  frontend-url: http://127.0.0.1:5173
+  internal-api-secret: ${INTERNAL_API_SECRET}
+
+eureka:
+  instance:
+    prefer-ip-address: true
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+
+logging:
+  level:
+    org.springframework.security: TRACE
+    com.justice.auth_service: DEBUG
+    org.springframework.web: DEBUG

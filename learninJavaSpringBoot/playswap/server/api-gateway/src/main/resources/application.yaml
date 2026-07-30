@@ -1,0 +1,59 @@
+server:
+  port: 9000
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8181/realms/playswap-realm
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          enabled: true
+      routes:
+        - id: auth-service
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/auth/**, /api/me/**, /login/**, /oauth2/**, /internal/tokens/**
+
+        - id: spotify-service
+          uri: lb://spotify-service
+          predicates:
+            - Path=/api/spotify/**
+
+        - id: ytmusic-service
+          uri: lb://ytmusic-service
+          predicates:
+            - Path=/api/ytmusic/**
+
+        - id: transfer-service
+          uri: lb://transfer-service
+          predicates:
+            - Path=/api/transfer/**
+
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:5173"
+              - "http://127.0.0.1:5173"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+
+eureka:
+  instance:
+    prefer-ip-address: true
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka
