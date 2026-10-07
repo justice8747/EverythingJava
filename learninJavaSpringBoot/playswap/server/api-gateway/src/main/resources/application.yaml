@@ -12,6 +12,8 @@ spring:
 
   cloud:
     gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Access-Control-Allow-Methods Access-Control-Allow-Headers, RETAIN_FIRST
       discovery:
         locator:
           enabled: true
@@ -34,7 +36,7 @@ spring:
         - id: transfer-service
           uri: lb://transfer-service
           predicates:
-            - Path=/api/transfer/**
+            - Path=/api/transfer/**, /api/history/**
 
       globalcors:
         cors-configurations:
@@ -57,3 +59,12 @@ eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always

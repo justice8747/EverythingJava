@@ -60,6 +60,9 @@ public class TokenRefreshService {
                     "No refresh token available for Spotify"));
         }
 
+        String authHeader = "Basic " + java.util.Base64.getEncoder()
+                .encodeToString((spotifyClientId + ":" + spotifyClientSecret).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
         MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
         formData.add("grant_type", "refresh_token");
         formData.add("refresh_token", tokenRecord.getRefreshToken());
@@ -69,6 +72,7 @@ public class TokenRefreshService {
         return webClientBuilder.build()
                 .post()
                 .uri("https://accounts.spotify.com/api/token")
+                .header("Authorization", authHeader)
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .body(BodyInserters.fromFormData(formData))
                 .retrieve()

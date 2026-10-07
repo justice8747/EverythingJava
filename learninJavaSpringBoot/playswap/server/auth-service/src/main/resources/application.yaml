@@ -32,7 +32,14 @@ spring:
             client-secret: ${SPOTIFY_CLIENT_SECRET}
             authorization-grant-type: authorization_code
             redirect-uri: "{baseUrl}/login/oauth2/code/spotify"
-            scope: playlist-read-private, playlist-modify-public, playlist-modify-private, user-read-private, user-read-email
+            scope:
+              - playlist-read-private
+              - playlist-read-collaborative
+              - playlist-modify-public
+              - playlist-modify-private
+              - user-read-private
+              - user-read-email
+              - user-library-read
             client-name: Spotify
           google:
             client-id: ${GOOGLE_CLIENT_ID}
@@ -63,7 +70,7 @@ keycloak:
 
 app:
   frontend-url: http://127.0.0.1:5173
-  internal-api-secret: ${INTERNAL_API_SECRET}
+  internal-api-secret: ${INTERNAL_API_SECRET:playswap-internal-secret-2026-jussy8747}
 
 eureka:
   instance:

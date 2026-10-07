@@ -15,6 +15,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -26,6 +27,7 @@ public class UserService {
     private final UserRepository userRepo;
     private final AccessTokenRepository accessTokerepo;
     private final PlatformTransactionManager transactionManager;
+    private final KeycloakService keycloakService;
 
     // ==========================================
     // DOOR A — Login or Register
@@ -120,11 +122,61 @@ public class UserService {
     // Internal — Get tokens for a user/platform
     // ==========================================
     public Mono<AccessToken> getTokens(UUID userId, String platform) {
-        return Mono.fromCallable(() ->
-                accessTokerepo.findByUserIdAndPlatform(userId, platform)
-                        .orElseThrow(() -> new RuntimeException(
-                                "No tokens found for user and platform"))
-        ).subscribeOn(Schedulers.boundedElastic());
+        return Mono.fromCallable(() -> {
+            log.info("Querying tokens for userId: {} and platform: {}", userId, platform);
+
+            List<String> platformVariants = platform.equalsIgnoreCase("youtube") || platform.equalsIgnoreCase("google")
+                    ? List.of("youtube", "google", "YOUTUBE", "GOOGLE")
+                    : List.of(platform.toLowerCase(), platform.toUpperCase(), platform);
+
+            // 1. Check all tokens for direct userId
+            List<AccessToken> directTokens = accessTokerepo.findAllByUserId(userId);
+            log.info("Found {} total tokens directly for userId {}", directTokens.size(), userId);
+            for (AccessToken t : directTokens) {
+                log.info("Token for userId {}: provider='{}'", userId, t.getPlatform());
+                if (platformVariants.stream().anyMatch(v -> v.equalsIgnoreCase(t.getPlatform()))) {
+                    return Optional.of(t);
+                }
+            }
+
+            // 2. Check search by platform ID on User entity
+            Optional<User> userByPlatform = platform.equalsIgnoreCase("spotify")
+                    ? userRepo.findBySpotifyId(userId.toString())
+                    : userRepo.findByYoutubeId(userId.toString());
+
+            if (userByPlatform.isPresent()) {
+                UUID dbId = userByPlatform.get().getId();
+                log.info("Found user by platform ID {}. Checking tokens for DB user ID {}", userId, dbId);
+                List<AccessToken> platformUserTokens = accessTokerepo.findAllByUserId(dbId);
+                for (AccessToken t : platformUserTokens) {
+                    if (platformVariants.stream().anyMatch(v -> v.equalsIgnoreCase(t.getPlatform()))) {
+                        return Optional.of(t);
+                    }
+                }
+            }
+
+            // 3. Fallback: Keycloak ID lookup
+            log.info("Attempting Keycloak ID lookup for ID {}...", userId);
+            try {
+                UUID dbUserId = keycloakService.getDbUserIdFromKeycloakId(userId.toString()).block();
+                if (dbUserId != null && !dbUserId.equals(userId)) {
+                    log.info("Keycloak resolved ID {} to DB User ID {}", userId, dbUserId);
+                    List<AccessToken> keycloakUserTokens = accessTokerepo.findAllByUserId(dbUserId);
+                    for (AccessToken t : keycloakUserTokens) {
+                        if (platformVariants.stream().anyMatch(v -> v.equalsIgnoreCase(t.getPlatform()))) {
+                            return Optional.of(t);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Keycloak lookup failed for user ID {}: {}", userId, e.getMessage());
+            }
+
+            log.info("No token found for userId {} on platform {}", userId, platform);
+            return Optional.<AccessToken>empty();
+        })
+        .flatMap(optionalToken -> optionalToken.map(Mono::just).orElseGet(Mono::empty))
+        .subscribeOn(Schedulers.boundedElastic());
     }
 
     // ==========================================

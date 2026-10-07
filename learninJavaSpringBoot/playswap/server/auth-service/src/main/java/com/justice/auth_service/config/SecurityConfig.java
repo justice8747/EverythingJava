@@ -20,6 +20,9 @@ import org.springframework.web.server.session.WebSessionIdResolver;
 
 import org.springframework.http.HttpCookie;
 import org.springframework.http.HttpHeaders;
+import org.springframework.security.oauth2.client.registration.ReactiveClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.server.DefaultServerOAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.client.web.server.ServerOAuth2AuthorizationRequestResolver;
 import org.springframework.security.oauth2.server.resource.authentication.BearerTokenAuthenticationToken;
 import reactor.core.publisher.Mono;
 
@@ -35,8 +38,11 @@ public class SecurityConfig {
 
 
     @Bean
-    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
+    public SecurityWebFilterChain securityWebFilterChain(
+            ServerHttpSecurity http,
+            ReactiveClientRegistrationRepository clientRegistrationRepository) {
         http
+                .cors(org.springframework.security.config.Customizer.withDefaults())
                 .authorizeExchange(exchanges -> exchanges
                         .pathMatchers(
                                 "/oauth2/**",
@@ -49,6 +55,7 @@ public class SecurityConfig {
                         .anyExchange().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2
+                        .authorizationRequestResolver(authorizationRequestResolver(clientRegistrationRepository))
                         .authenticationSuccessHandler(successHandler)
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
@@ -69,6 +76,33 @@ public class SecurityConfig {
                 .logout(logout -> logout.disable());
 
         return http.build();
+    }
+
+    @Bean
+    public ServerOAuth2AuthorizationRequestResolver authorizationRequestResolver(
+            ReactiveClientRegistrationRepository clientRegistrationRepository) {
+        DefaultServerOAuth2AuthorizationRequestResolver resolver =
+                new DefaultServerOAuth2AuthorizationRequestResolver(clientRegistrationRepository);
+        resolver.setAuthorizationRequestCustomizer(customizer -> customizer.additionalParameters(params -> {
+            params.put("access_type", "offline");
+            params.put("prompt", "consent");
+            params.put("show_dialog", "true");
+        }));
+        return resolver;
+    }
+
+    @Bean
+    public org.springframework.web.cors.reactive.CorsConfigurationSource corsConfigurationSource() {
+        org.springframework.web.cors.CorsConfiguration config = new org.springframework.web.cors.CorsConfiguration();
+        config.setAllowedOriginPatterns(java.util.List.of("http://localhost:*", "http://127.0.0.1:*"));
+        config.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"));
+        config.setAllowedHeaders(java.util.List.of("*"));
+        config.setAllowCredentials(true);
+
+        org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource source =
+                new org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
     @Bean
     public ReactiveOAuth2UserService<OAuth2UserRequest, OAuth2User> oauth2UserService() {

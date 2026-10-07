@@ -47,8 +47,10 @@ public class KeycloakService {
     public void init() {
         // Build WebClient ONCE
         this.webClient = webClientBuilder.baseUrl(keycloakBaseUrl).build();
-        // Cache admin token to save HTTP calls
-        this.adminTokenCache = fetchAdminToken().cache(Duration.ofMinutes(4));
+    }
+
+    private Mono<String> getAdminToken() {
+        return fetchAdminToken();
     }
 
     private Mono<String> fetchAdminToken() {
@@ -144,10 +146,28 @@ public class KeycloakService {
     }
 
     public Mono<String> mintToken(UUID userId, User user) {
-        return adminTokenCache
+        return getAdminToken()
                 .flatMap(adminToken -> createOrFetchKeycloakUser(adminToken, user)
                         .flatMap(keycloakUserId -> mintJwt(keycloakUserId)))
                 .doOnSuccess(jwt -> log.info("JWT minted for user {}", userId))
                 .doOnError(e -> log.error("Failed to mint JWT for user {}: {}", userId, e.getMessage()));
+    }
+
+    public Mono<UUID> getDbUserIdFromKeycloakId(String keycloakUserId) {
+        return getAdminToken().flatMap(adminToken ->
+                webClient.get()
+                        .uri("/admin/realms/" + realm + "/users/" + keycloakUserId)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .retrieve()
+                        .bodyToMono(Map.class)
+                        .map(userMap -> {
+                            String username = (String) userMap.get("username");
+                            if (username == null || username.isBlank()) {
+                                throw new RuntimeException("No username found for Keycloak user " + keycloakUserId);
+                            }
+                            return UUID.fromString(username);
+                        })
+                        .doOnError(e -> log.warn("Could not find Keycloak user for ID {}: {}", keycloakUserId, e.getMessage()))
+        );
     }
 }

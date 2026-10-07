@@ -1,0 +1,151 @@
+version: '3.8'
+
+services:
+  # -------------------------------------------------------
+  # Database Service (PostgreSQL)
+  # -------------------------------------------------------
+  playswap-db:
+    image: postgres:16-alpine
+    container_name: playswap-db
+    restart: always
+    environment:
+      POSTGRES_DB: playswap
+      POSTGRES_USER: ${DB_AUTH_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_AUTH_PASSWORD:-8747}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_AUTH_USERNAME:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # -------------------------------------------------------
+  # Service Discovery (Eureka Server)
+  # -------------------------------------------------------
+  eureka-server:
+    build:
+      context: ./eureka-server
+      dockerfile: Dockerfile
+    container_name: eureka-server
+    restart: always
+    ports:
+      - "8761:8761"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # -------------------------------------------------------
+  # API Gateway
+  # -------------------------------------------------------
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    restart: always
+    ports:
+      - "9000:9000"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+
+  # -------------------------------------------------------
+  # Auth Microservice
+  # -------------------------------------------------------
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      DB_AUTH_URL: jdbc:postgresql://playswap-db:5432/playswap
+      DB_AUTH_USERNAME: ${DB_AUTH_USERNAME:-postgres}
+      DB_AUTH_PASSWORD: ${DB_AUTH_PASSWORD:-8747}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-playswap-internal-secret-2026-jussy8747}
+    depends_on:
+      playswap-db:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+
+  # -------------------------------------------------------
+  # Spotify Microservice
+  # -------------------------------------------------------
+  spotify-service:
+    build:
+      context: ./spotify-service
+      dockerfile: Dockerfile
+    container_name: spotify-service
+    restart: always
+    ports:
+      - "8082:8082"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka
+      SERVICES_AUTH_SERVICE_URL: http://auth-service:8080
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-playswap-internal-secret-2026-jussy8747}
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+
+  # -------------------------------------------------------
+  # YouTube Music Microservice
+  # -------------------------------------------------------
+  ytmusic-service:
+    build:
+      context: ./ytmusic-service
+      dockerfile: Dockerfile
+    container_name: ytmusic-service
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka
+      SERVICES_AUTH_SERVICE_URL: http://auth-service:8080
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-playswap-internal-secret-2026-jussy8747}
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+
+  # -------------------------------------------------------
+  # Transfer Execution Microservice
+  # -------------------------------------------------------
+  transfer-service:
+    build:
+      context: ./transfer-service
+      dockerfile: Dockerfile
+    container_name: transfer-service
+    restart: always
+    ports:
+      - "8083:8083"
+    environment:
+      DB_AUTH_URL: jdbc:postgresql://playswap-db:5432/playswap
+      DB_AUTH_USERNAME: ${DB_AUTH_USERNAME:-postgres}
+      DB_AUTH_PASSWORD: ${DB_AUTH_PASSWORD:-8747}
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka
+      SERVICES_SPOTIFY_SERVICE_URL: http://spotify-service:8082
+      SERVICES_YTMUSIC_SERVICE_URL: http://ytmusic-service:8081
+    depends_on:
+      playswap-db:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

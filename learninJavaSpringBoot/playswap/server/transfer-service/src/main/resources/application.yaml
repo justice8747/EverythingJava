@@ -1,8 +1,30 @@
 server:
   port: 8083
+
 spring:
   application:
     name: transfer-service
+
+  main:
+    web-application-type: reactive
+
+  datasource:
+    url: ${DB_AUTH_URL:jdbc:postgresql://localhost:5432/playswap}
+    username: ${DB_AUTH_USERNAME:postgres}
+    password: ${DB_AUTH_PASSWORD:8747}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+services:
+  spotify-service-url: http://localhost:8082
+  ytmusic-service-url: http://localhost:8081
 
 eureka:
   instance:
@@ -10,3 +32,12 @@ eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
