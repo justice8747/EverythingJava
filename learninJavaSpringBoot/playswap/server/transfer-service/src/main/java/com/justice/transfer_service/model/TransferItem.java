@@ -24,8 +24,19 @@ public class TransferItem {
     @Column(name = "target_track_id")
     private String targetTrackId;
 
+    @Column(name = "status")
     private String status;
 
     @Column(name = "confidence_score")
     private Integer confidenceScore;
+
+    @Builder.Default
+    @Column(name = "retry_count")
+    private Integer retryCount = 0;
+
+    @Column(name = "error_message", columnDefinition = "TEXT")
+    private String errorMessage;
+
+    @Column(name = "matched_track_uri")
+    private String matchedTrackUri;
 }

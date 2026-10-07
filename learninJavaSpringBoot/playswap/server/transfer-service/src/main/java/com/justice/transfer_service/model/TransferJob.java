@@ -25,7 +25,21 @@ public class TransferJob {
     @Column(name = "source_playlist_name")
     private String sourcePlaylistName;
 
+    @Column(name = "target_playlist_id")
+    private String targetPlaylistId;
+
+    @Column(name = "target_playlist_url")
+    private String targetPlaylistUrl;
+
+    @Column(name = "idempotency_key")
+    private String idempotencyKey;
+
+    @Column(name = "status")
     private String status;
+
+    @Builder.Default
+    @Column(name = "retry_count")
+    private Integer retryCount = 0;
 
     @Column(name = "created_at", insertable = false, updatable = false)
     private LocalDateTime createdAt;

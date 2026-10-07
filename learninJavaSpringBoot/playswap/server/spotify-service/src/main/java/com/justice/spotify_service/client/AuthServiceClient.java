@@ -26,7 +26,7 @@ public class AuthServiceClient {
     private String internalApiSecret;
 
     public Mono<String> getSpotifyAccessToken(String userId) {
-        log.info("==> [AuthServiceClient] Requesting token from auth-service for userId: '{}' | Secret: '{}'", userId, internalApiSecret);
+        log.info("==> [AuthServiceClient] Requesting Spotify token from auth-service for userId: '{}'", userId);
         return webClientBuilder.build()
                 .get()
                 .uri(authServiceUrl + "/internal/tokens/" + userId + "/spotify")
@@ -43,8 +43,7 @@ public class AuthServiceClient {
                                 "Auth service error while fetching Spotify token for user: " + userId)))
                 .bodyToMono(Map.class)
                 .map(response -> (String) response.get("accessToken"))
-                .doOnNext(token -> log.info("<== [AuthServiceClient] Successfully retrieved Spotify Access Token for userId '{}' | Token Prefix: '{}...' (Length: {})",
-                        userId, token != null && token.length() > 20 ? token.substring(0, 20) : token, token != null ? token.length() : 0))
+                .doOnNext(token -> log.info("<== [AuthServiceClient] Successfully retrieved Spotify Access Token for userId '{}'", userId))
                 .doOnError(e -> log.error(
                         "Failed to fetch Spotify token for user {}: {}",
                         userId, e.getMessage()));

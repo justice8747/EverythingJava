@@ -21,7 +21,7 @@ spring:
         - id: auth-service
           uri: lb://auth-service
           predicates:
-            - Path=/api/auth/**, /api/me/**, /login/**, /oauth2/**, /internal/tokens/**
+            - Path=/api/auth/**, /api/me/**, /login/**, /oauth2/**
 
         - id: spotify-service
           uri: lb://spotify-service
@@ -64,7 +64,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,prometheus
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized

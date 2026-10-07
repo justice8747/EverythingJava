@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   # -------------------------------------------------------
-  # Database Service (PostgreSQL)
+  # Database Service (PostgreSQL - Internal Only)
   # -------------------------------------------------------
   playswap-db:
     image: postgres:16-alpine
@@ -10,20 +10,21 @@ services:
     restart: always
     environment:
       POSTGRES_DB: playswap
-      POSTGRES_USER: ${DB_AUTH_USERNAME:-postgres}
-      POSTGRES_PASSWORD: ${DB_AUTH_PASSWORD:-8747}
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${DB_AUTH_USERNAME:?DB_AUTH_USERNAME environment variable is required}
+      POSTGRES_PASSWORD: ${DB_AUTH_PASSWORD:?DB_AUTH_PASSWORD environment variable is required}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts/01-init-db.sh:/docker-entrypoint-initdb.d/01-init-db.sh
+      - ./auth-service/auth_service_data.sql:/docker-entrypoint-initdb.d/auth_service_data.sql
+      - ./transfer-service/transfer_service_data.sql:/docker-entrypoint-initdb.d/transfer_service_data.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_AUTH_USERNAME:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_AUTH_USERNAME:?DB_AUTH_USERNAME environment variable is required}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   # -------------------------------------------------------
-  # Service Discovery (Eureka Server)
+  # Service Discovery (Eureka Server - Internal Only)
   # -------------------------------------------------------
   eureka-server:
     build:
@@ -31,8 +32,6 @@ services:
       dockerfile: Dockerfile
     container_name: eureka-server
     restart: always
-    ports:
-      - "8761:8761"
     environment:
       SPRING_PROFILES_ACTIVE: prod
     healthcheck:
@@ -42,7 +41,7 @@ services:
       retries: 5
 
   # -------------------------------------------------------
-  # API Gateway
+  # API Gateway (Public Entry Point)
   # -------------------------------------------------------
   api-gateway:
     build:
@@ -59,7 +58,7 @@ services:
         condition: service_healthy
 
   # -------------------------------------------------------
-  # Auth Microservice
+  # Auth Microservice (Internal Only)
   # -------------------------------------------------------
   auth-service:
     build:
@@ -67,18 +66,16 @@ services:
       dockerfile: Dockerfile
     container_name: auth-service
     restart: always
-    ports:
-      - "8080:8080"
     environment:
-      DB_AUTH_URL: jdbc:postgresql://playswap-db:5432/playswap
-      DB_AUTH_USERNAME: ${DB_AUTH_USERNAME:-postgres}
-      DB_AUTH_PASSWORD: ${DB_AUTH_PASSWORD:-8747}
+      DB_AUTH_URL: jdbc:postgresql://playswap-db:5432/playswap_auth
+      DB_AUTH_USERNAME: ${DB_AUTH_USERNAME:?DB_AUTH_USERNAME environment variable is required}
+      DB_AUTH_PASSWORD: ${DB_AUTH_PASSWORD:?DB_AUTH_PASSWORD environment variable is required}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka
-      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID}
-      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-playswap-internal-secret-2026-jussy8747}
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:?SPOTIFY_CLIENT_ID environment variable is required}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:?SPOTIFY_CLIENT_SECRET environment variable is required}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID environment variable is required}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?GOOGLE_CLIENT_SECRET environment variable is required}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET environment variable is required}
     depends_on:
       playswap-db:
         condition: service_healthy
@@ -86,7 +83,7 @@ services:
         condition: service_healthy
 
   # -------------------------------------------------------
-  # Spotify Microservice
+  # Spotify Microservice (Internal Only)
   # -------------------------------------------------------
   spotify-service:
     build:
@@ -94,18 +91,16 @@ services:
       dockerfile: Dockerfile
     container_name: spotify-service
     restart: always
-    ports:
-      - "8082:8082"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka
       SERVICES_AUTH_SERVICE_URL: http://auth-service:8080
-      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-playswap-internal-secret-2026-jussy8747}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET environment variable is required}
     depends_on:
       eureka-server:
         condition: service_healthy
 
   # -------------------------------------------------------
-  # YouTube Music Microservice
+  # YouTube Music Microservice (Internal Only)
   # -------------------------------------------------------
   ytmusic-service:
     build:
@@ -113,18 +108,16 @@ services:
       dockerfile: Dockerfile
     container_name: ytmusic-service
     restart: always
-    ports:
-      - "8081:8081"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka
       SERVICES_AUTH_SERVICE_URL: http://auth-service:8080
-      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-playswap-internal-secret-2026-jussy8747}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET environment variable is required}
     depends_on:
       eureka-server:
         condition: service_healthy
 
   # -------------------------------------------------------
-  # Transfer Execution Microservice
+  # Transfer Execution Microservice (Internal Only)
   # -------------------------------------------------------
   transfer-service:
     build:
@@ -132,12 +125,10 @@ services:
       dockerfile: Dockerfile
     container_name: transfer-service
     restart: always
-    ports:
-      - "8083:8083"
     environment:
-      DB_AUTH_URL: jdbc:postgresql://playswap-db:5432/playswap
-      DB_AUTH_USERNAME: ${DB_AUTH_USERNAME:-postgres}
-      DB_AUTH_PASSWORD: ${DB_AUTH_PASSWORD:-8747}
+      DB_AUTH_URL: jdbc:postgresql://playswap-db:5432/playswap_transfer
+      DB_AUTH_USERNAME: ${DB_AUTH_USERNAME:?DB_AUTH_USERNAME environment variable is required}
+      DB_AUTH_PASSWORD: ${DB_AUTH_PASSWORD:?DB_AUTH_PASSWORD environment variable is required}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka
       SERVICES_SPOTIFY_SERVICE_URL: http://spotify-service:8082
       SERVICES_YTMUSIC_SERVICE_URL: http://ytmusic-service:8081

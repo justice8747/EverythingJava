@@ -39,12 +39,13 @@ public class PlaylistAnalysisService {
             log.warn("Could not parse userId to UUID: {}", userIdStr);
         }
 
-        // 1. Create Transfer Session
+        // 1. Create Transfer Session in CREATED state then transition to ANALYZING
         TransferSession session = TransferSession.builder()
                 .userId(userUuid)
                 .sourcePlatform(request.getSourcePlatform())
                 .targetPlatform(request.getTargetPlatform())
-                .status("PROCESSING")
+                .idempotencyKey(UUID.randomUUID().toString())
+                .status(TransferStatus.ANALYZING.name())
                 .build();
         session = sessionRepository.save(session);
         final UUID sessionId = session.getId();
@@ -56,7 +57,7 @@ public class PlaylistAnalysisService {
 
         List<JobSummaryDto> jobSummaries = Collections.synchronizedList(new ArrayList<>());
 
-        // 2. Process each playlist sequentially / concurrently
+        // 2. Process each playlist
         return Flux.fromIterable(request.getPlaylistIds())
                 .concatMap(playlistId -> {
                     String playlistName = request.getPlaylistNames() != null ?
@@ -66,7 +67,8 @@ public class PlaylistAnalysisService {
                             .sessionId(sessionId)
                             .sourcePlaylistId(playlistId)
                             .sourcePlaylistName(playlistName)
-                            .status("PROCESSING")
+                            .idempotencyKey(UUID.randomUUID().toString())
+                            .status(TransferStatus.ANALYZING.name())
                             .build();
                     TransferJob savedJob = jobRepository.save(job);
 
@@ -97,7 +99,7 @@ public class PlaylistAnalysisService {
                                                     }
                                                 }), 5) // Concurrency limit 5
                                         .then(Mono.fromRunnable(() -> {
-                                            savedJob.setStatus("COMPLETED");
+                                            savedJob.setStatus(TransferStatus.READY.name());
                                             jobRepository.save(savedJob);
                                             jobSummaries.add(JobSummaryDto.builder()
                                                     .jobId(savedJob.getId())
@@ -108,11 +110,17 @@ public class PlaylistAnalysisService {
                                                     .unmatchedCount(jobUnmatched.get())
                                                     .build());
                                         }));
+                            })
+                            .onErrorResume(e -> {
+                                log.error("Error analyzing playlist {}: {}", playlistId, e.getMessage());
+                                savedJob.setStatus(TransferStatus.FAILED.name());
+                                jobRepository.save(savedJob);
+                                return Mono.empty();
                             });
                 })
                 .then(Mono.defer(() -> {
                     TransferSession finalSession = sessionRepository.findById(sessionId).orElseThrow();
-                    finalSession.setStatus("COMPLETED");
+                    finalSession.setStatus(TransferStatus.READY.name());
                     sessionRepository.save(finalSession);
 
                     return Mono.just(AnalysisSummaryResponse.builder()
@@ -122,7 +130,7 @@ public class PlaylistAnalysisService {
                             .matchedTracks(totalMatchedCount.get())
                             .unmatchedTracks(totalUnmatchedCount.get())
                             .cachedMatches(totalCachedCount.get())
-                            .status("COMPLETED")
+                            .status(TransferStatus.READY.name())
                             .jobs(jobSummaries)
                             .build());
                 }));
@@ -142,8 +150,10 @@ public class PlaylistAnalysisService {
                     .jobId(jobId)
                     .sourceTrackId(track.getTrackId())
                     .targetTrackId(mapping.getDestinationTrackId())
-                    .status("SUCCESS")
+                    .matchedTrackUri(mapping.getDestinationTrackId())
+                    .status(ItemStatus.PENDING.name())
                     .confidenceScore(mapping.getConfidenceScore())
+                    .retryCount(0)
                     .build();
             itemRepository.save(item);
             return Mono.just(true);
@@ -166,7 +176,6 @@ public class PlaylistAnalysisService {
                     }
 
                     if (matchedTargetId != null) {
-                        // Save new song mapping
                         SongMapping newMapping = SongMapping.builder()
                                 .sourcePlatform(sourcePlatform)
                                 .sourceTrackId(track.getTrackId())
@@ -183,8 +192,10 @@ public class PlaylistAnalysisService {
                                 .jobId(jobId)
                                 .sourceTrackId(track.getTrackId())
                                 .targetTrackId(matchedTargetId)
-                                .status("SUCCESS")
+                                .matchedTrackUri(matchedTargetId)
+                                .status(ItemStatus.PENDING.name())
                                 .confidenceScore(result.getConfidence())
+                                .retryCount(0)
                                 .build();
                         itemRepository.save(item);
                         return true;
@@ -193,8 +204,10 @@ public class PlaylistAnalysisService {
                                 .jobId(jobId)
                                 .sourceTrackId(track.getTrackId())
                                 .targetTrackId(null)
-                                .status("UNMATCHED")
+                                .status(ItemStatus.SKIPPED.name())
+                                .errorMessage("No match found on target platform")
                                 .confidenceScore(0)
+                                .retryCount(0)
                                 .build();
                         itemRepository.save(item);
                         return false;

@@ -61,6 +61,29 @@ public class TransferController {
         return playlistTransferExecutionService.executeTransfer(userId, request);
     }
 
+    @PostMapping({"/resume/{sessionId}", "/resume"})
+    public Mono<com.justice.transfer_service.dto.ExecuteTransferResponse> resumeTransfer(
+            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @PathVariable(required = false) java.util.UUID sessionId,
+            @RequestBody(required = false) com.justice.transfer_service.dto.ExecuteTransferRequest request) {
+        if (userId == null || userId.isBlank()) {
+            log.error("Rejecting resume request: Missing X-User-Id header");
+            return Mono.error(new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "Missing required X-User-Id header."));
+        }
+        java.util.UUID targetSessionId = sessionId != null ? sessionId : (request != null ? request.getSessionId() : null);
+        if (targetSessionId == null) {
+            log.error("Rejecting resume request from user {}: Missing sessionId", userId);
+            return Mono.error(new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Must provide sessionId path parameter or body property."));
+        }
+        log.info("Received resume transfer request from user {} for session {}", userId, targetSessionId);
+        com.justice.transfer_service.dto.ExecuteTransferRequest req = com.justice.transfer_service.dto.ExecuteTransferRequest.builder()
+                .sessionId(targetSessionId)
+                .build();
+        return playlistTransferExecutionService.executeTransfer(userId, req);
+    }
+
     @GetMapping({"/history", "/history/sessions", "/user/history"})
     public Mono<java.util.List<com.justice.transfer_service.dto.TransferSessionHistoryDto>> getTransferHistory(
             @RequestHeader(value = "X-User-Id", required = false) String userId) {

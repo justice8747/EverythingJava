@@ -1,10 +1,7 @@
 package com.justice.auth_service.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -28,9 +25,13 @@ public class AccessToken {
     @Column(name = "provider", nullable = false)
     private String platform;
 
+    @Convert(converter = TokenEncryptionConverter.class)
+    @ToString.Exclude
     @Column(name = "access_token", nullable = false, columnDefinition = "TEXT")
     private String accessToken;
 
+    @Convert(converter = TokenEncryptionConverter.class)
+    @ToString.Exclude
     @Column(name = "refresh_token", columnDefinition = "TEXT")
     private String refreshToken;
 

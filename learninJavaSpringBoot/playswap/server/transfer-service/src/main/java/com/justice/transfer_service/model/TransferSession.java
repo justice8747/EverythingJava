@@ -25,6 +25,10 @@ public class TransferSession {
     @Column(name = "target_platform")
     private String targetPlatform;
 
+    @Column(name = "idempotency_key")
+    private String idempotencyKey;
+
+    @Column(name = "status")
     private String status;
 
     @Column(name = "created_at", insertable = false, updatable = false)
